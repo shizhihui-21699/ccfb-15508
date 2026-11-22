@@ -1,0 +1,16 @@
+{
+  "name": "flash-guard",
+  "version": "0.1.0",
+  "description": "Real-time photosensitive flash detection and mitigation for web media (WCAG 2.3.1 / Harding test)",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node test/detector.test.mjs"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlashGuard 演示</title>
+<style>
+  body { font: 15px/1.7 system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px 16px; background: #111; color: #eee; }
+  h1 { font-size: 20px; }
+  .warn { background: #4a1d1d; border: 1px solid #a33; padding: 12px 16px; border-radius: 8px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+  figure { margin: 0; }
+  figcaption { text-align: center; margin-top: 6px; color: #aaa; }
+  canvas { width: 320px; height: 180px; background: #000; display: block; }
+  button, label { font: inherit; }
+  button { padding: 6px 14px; border-radius: 6px; border: 1px solid #888; background: #222; color: #eee; cursor: pointer; }
+  #log { font: 12px/1.5 ui-monospace, monospace; background: #000; padding: 12px; border-radius: 8px; height: 160px; overflow: auto; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>FlashGuard 实时检测与削弱演示</h1>
+<p class="warn"><strong>警告:</strong>本页面可以生成高频闪烁图案,仅用于验证防护功能。
+光敏性癫痫患者及易感人群请勿点击"开始闪烁",或确保右侧"受保护"开关已打开。</p>
+
+<div class="row">
+  <figure>
+    <canvas id="raw" width="320" height="180"></canvas>
+    <figcaption>未保护(原始画面)</figcaption>
+  </figure>
+  <figure>
+    <canvas id="guarded" width="320" height="180"></canvas>
+    <figcaption>受保护(FlashGuard 实时削弱)</figcaption>
+  </figure>
+</div>
+
+<p>
+  <label>闪烁频率 <input id="hz" type="range" min="1" max="20" value="10" step="1"> <span id="hzVal">10</span> Hz</label>
+  <label>模式
+    <select id="mode">
+      <option value="bw">黑/白</option>
+      <option value="red">饱和红/黑</option>
+      <option value="scene">正常剪辑(对照)</option>
+    </select>
+  </label>
+  <button id="toggle">开始闪烁</button>
+  <label><input id="guardOn" type="checkbox" checked> 启用保护</label>
+</p>
+
+<div id="log"></div>
+
+<script type="module">
+  import { MediaProtector } from '../dist/index.js';
+
+  const raw = document.getElementById('raw');
+  const guarded = document.getElementById('guarded');
+  const logEl = document.getElementById('log');
+  const hzInput = document.getElementById('hz');
+  const hzVal = document.getElementById('hzVal');
+  const modeSel = document.getElementById('mode');
+  const toggleBtn = document.getElementById('toggle');
+  const guardOn = document.getElementById('guardOn');
+
+  let running = false;
+  let protector = null;
+
+  function log(msg) {
+    const time = new Date().toLocaleTimeString();
+    logEl.textContent += `[${time}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function setGuard(on) {
+    if (on && !protector) {
+      protector = new MediaProtector(guarded, {
+        onLevelChange: (level, a) =>
+          log(`防护等级 → ${level}  亮度闪烁=${a.luminanceFlashesPerSecond}/s 红色闪烁=${a.redFlashesPerSecond}/s 违规=${a.violation ?? '无'}`),
+      });
+      protector.start();
+      log('保护已启用');
+    } else if (!on && protector) {
+      protector.dispose();
+      protector = null;
+      log('保护已关闭');
+    }
+  }
+
+  function draw(ctx, t) {
+    const hz = Number(hzInput.value);
+    const mode = modeSel.value;
+    const { width, height } = ctx.canvas;
+    if (mode === 'scene') {
+      // 对照组:每秒切换一次的"正常视频场景",不应触发防护
+      const scene = Math.floor(t / 1000) % 3;
+      ctx.fillStyle = ['#203040', '#705030', '#305030'][scene];
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(((t / 10) % width), height / 2 - 10, 40, 20);
+      return;
+    }
+    const on = Math.floor(t / (1000 / hz)) % 2 === 0;
+    if (mode === 'red') {
+      ctx.fillStyle = on ? '#ff0000' : '#000';
+    } else {
+      ctx.fillStyle = on ? '#fff' : '#000';
+    }
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  function loop(t) {
+    if (running) {
+      draw(raw.getContext('2d'), t);
+      draw(guarded.getContext('2d'), t);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  hzInput.addEventListener('input', () => (hzVal.textContent = hzInput.value));
+  toggleBtn.addEventListener('click', () => {
+    running = !running;
+    toggleBtn.textContent = running ? '停止' : '开始闪烁';
+  });
+  guardOn.addEventListener('change', () => setGuard(guardOn.checked));
+
+  setGuard(true);
+  requestAnimationFrame(loop);
+</script>
+</body>
+</html>
